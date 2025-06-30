@@ -1,0 +1,180 @@
+import PayOS from "@payos/node";
+import Payment from "../models/Payment.js";
+import "dotenv/config";
+import User from "../models/User.js";
+import Apartment from "../models/Apartment.js";
+import Bill from "../models/Bill.js";
+import CustomerRequest from "../models/CustomerRequest.js";
+
+const payos = new PayOS(process.env.PAYOS_CLIENT_ID, process.env.PAYOS_API_KEY, process.env.PAYOS_CHECKSUM_KEY);
+
+const generateOrderCode = async () => {
+    let orderCode;
+    let isUnique = false;
+
+    while (!isUnique) {
+        orderCode = Math.floor(100000 + Math.random() * 900000);
+        const existingOrder = await Payment.findOne({ orderCode: orderCode });
+        if (!existingOrder) {
+            isUnique = true;
+        }
+    }
+
+    return orderCode;
+};
+
+export const depositPayment = async (req, res) => {
+    try {
+        const { userId, apartmentId } = req.body;
+
+        if (!userId || !apartmentId) {
+            return res.status(400).json({ message: "Missing required parameters" });
+        }
+
+        const [user, apartment] = await Promise.all([
+            User.findById(userId),
+            Apartment.findById(apartmentId)
+        ]);
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+        if (!apartment) {
+            return res.status(404).json({ message: "Apartment not found" });
+        }
+
+        const orderCode = await generateOrderCode();
+
+        await Bill.findOneAndUpdate(
+            {
+                user_id: userId,
+                apartment_id: apartmentId,
+                typeOfPaid: "Deposit"
+            },
+            { $set: { orderCode: orderCode } }
+        );
+
+        // ✅ Giới hạn mô tả 25 ký tự
+        const rawDescription = `Deposit${apartment.apartmentNumber}${user.username}`;
+        const description = rawDescription.length > 25 ? rawDescription.slice(0, 25) : rawDescription;
+
+        const order = {
+            amount: 10000,
+            description,
+            orderCode,
+            returnUrl: `${process.env.FRONTEND_URL}/success`,
+            cancelUrl: `${process.env.FRONTEND_URL}/cancel`
+        };
+
+        const paymentLink = await payos.createPaymentLink(order);
+        return res.status(200).json({ checkoutUrl: paymentLink.checkoutUrl });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: "Internal Server Error" });
+    }
+};
+
+export const checkPaymentStatus = async (req, res) => {
+    try {
+        const { orderCode, userId } = req.body;
+        const paymentInfo = await payos.getPaymentLinkInformation(orderCode);
+
+        const newPayment = new Payment({
+            orderCode: paymentInfo.orderCode,
+            amount: paymentInfo.amount,
+            description: paymentInfo.transactions[0].description,
+            user_id: userId,
+        });
+        await newPayment.save();
+
+        await Bill.findOneAndUpdate(
+            { orderCode: orderCode },
+            {
+                $set: {
+                    status: "Paid"
+                }
+            }
+        );
+
+        if (paymentInfo.transactions[0].description.includes("Deposit")) {
+            const descript = paymentInfo.transactions[0].description.substring(paymentInfo.transactions[0].description.indexOf("Deposit"));
+            const apartmentNumber = descript.substring(7, 10);
+            console.log(apartmentNumber);
+            const apartment = await Apartment.findOne({ apartmentNumber: apartmentNumber });
+            if (!apartment) {
+                return res.status(404).json({ message: "Apartment not found" });
+            }
+
+            await Apartment.findByIdAndUpdate(
+                apartment._id,
+                { $set: { status: "Đã cọc" } },
+                { new: true }
+            );
+        }
+
+        return res.status(200).json({ message: "Save success" });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: "Internal Server Error" });
+    }
+};
+
+export const getAllBill = async (req, res) => {
+    try {
+        const { id } = req.body;
+        console.log(id);
+        const bills = await Bill.find({ user_id: id }).populate('apartment_id');
+        if (!bills) {
+            return res.status(404).json({ message: "Find bill failed" });
+        }
+
+        res.status(200).json(bills);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: "Internal Server Error" });
+    }
+};
+
+export const BillPayment = async (req, res) => {
+    try {
+        const { id } = req.body;
+        console.log(id);
+
+        if (!id) {
+            return res.status(400).json({ message: "Missing required parameters" });
+        }
+
+        const bill = await Bill.findById(id).populate('user_id apartment_id');
+
+        if (!bill) {
+            return res.status(400).json({ message: "Can not find bill" });
+        }
+
+        const orderCode = await generateOrderCode();
+
+        await Bill.findByIdAndUpdate(
+            id,
+            {
+                $set: { orderCode: orderCode },
+            }
+        );
+
+        // ✅ Giới hạn mô tả 25 ký tự
+        const rawDescription = `PAY${bill.typeOfPaid}${bill.apartment_id.apartmentNumber}${bill.user_id.username}`;
+        const description = rawDescription.length > 25 ? rawDescription.slice(0, 25) : rawDescription;
+
+        const order = {
+            amount: bill.fee,
+            description,
+            orderCode,
+            returnUrl: `${process.env.FRONTEND_URL}/success`,
+            cancelUrl: `${process.env.FRONTEND_URL}/cancel`
+        };
+
+        const paymentLink = await payos.createPaymentLink(order);
+        return res.status(200).json({ checkoutUrl: paymentLink.checkoutUrl });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: "Internal Server Error" });
+    }
+};
