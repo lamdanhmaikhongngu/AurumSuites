@@ -1,0 +1,87 @@
+.custom-navbar {
+    background:#222;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    z-index: 1050;
+    transition: all 0.3s ease;
+}
+
+.brand-logo {
+    font-size: 1.7rem;
+    font-weight: 700;
+    color: #d4af37 !important; /* vàng ánh kim */
+    letter-spacing: 1px;
+}
+
+.nav-link {
+    color: #f0f0f0 !important;
+    font-weight: 500;
+    margin-right: 1rem;
+    position: relative;
+}
+
+.nav-link:hover,
+.nav-link.active {
+    color: #d4af37 !important;
+}
+
+.navbar-toggler {
+    border: none;
+}
+
+.navbar-toggler:focus {
+    box-shadow: none;
+}
+
+.user-dropdown {
+    background: transparent;
+    border: none;
+    display: flex;
+    align-items: center;
+    font-weight: 500;
+    color: #f0f0f0;
+    padding: 0;
+}
+
+.avatar-img {
+    border: 2px solid #d4af37;
+    object-fit: cover;
+    transition: transform 0.2s ease;
+}
+
+.avatar-img:hover {
+    transform: scale(1.05);
+}
+
+.user-name {
+    font-weight: 500;
+    color: #f0f0f0;
+}
+
+.dropdown-menu {
+    border-radius: 10px;
+    box-shadow: 0 8px 20px #f0f0f0;
+    border: none;
+}
+
+.dropdown-item {
+    border-radius: 6px;
+    padding: 0.5rem 1rem;
+}
+
+.dropdown-item:hover {
+    background-color: #f0f0f0;
+}
+
+.btn-dark {
+    border-radius: 20px;
+    padding: 0.4rem 1.1rem;
+}
+
+.btn-outline-dark {
+    border-radius: 20px;
+    padding: 0.4rem 1.1rem;
+    border-width: 2px;
+}
